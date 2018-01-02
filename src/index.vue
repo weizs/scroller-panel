@@ -3,13 +3,13 @@
         <div class="scroller__wrapper">
             <div v-if="pullDown"
                  class="scroller__pull-down"
-                 :class="{ loading: loading.down, pending: pending.down }"
-                 :style="[pullDownStyle, { marginTop: `-${loading.down || pending.down ? 0 : pullDownOffset }px`}]">
+                 :class="{ loading: loadingDown, pending: pendingDown }"
+                 :style="[pullDownStyle, { marginTop: `-${loadingDown || pendingDown ? 0 : pullDownOffset }px`}]">
                 <slot name="pull-down"
-                      :loading="loading.down"
-                      :pending="pending.down">
+                      :loading="loadingDown"
+                      :pending="pendingDown">
                     <span class="pull-down__label"
-                          v-html="label.down"></span>
+                          v-html="labelDown"></span>
                 </slot>
             </div>
             <div class="scroller__content">
@@ -17,12 +17,12 @@
             </div>
             <div v-if="pullUp"
                  class="scroller__pull-up"
-                 :class="{ loading: loading.up, pending: pending.up }">
+                 :class="{ loading: loadingUp, pending: pendingUp }">
                 <slot name="pull-up"
-                      :loading="loading.up"
-                      :pending="pending.up">
+                      :loading="loadingUp"
+                      :pending="pendingUp">
                     <span class="pull-up__label"
-                          v-html="label.up"></span>
+                          v-html="labelUp"></span>
                 </slot>
             </div>
         </div>
@@ -37,8 +37,8 @@ export default {
     props: {
         value: {},
         config: Object,
-        pullDown: Function,
-        pullUp: Function,
+        pullDown: [Function, Boolean],
+        pullUp: [Function, Boolean],
         pullThreshold: {
             type: Number,
             default: 5
@@ -51,51 +51,57 @@ export default {
             type: Number,
             default: 45
         },
-        pullDownTip: {
-            type: Object,
-            default() {
-                return {
-                    normal: '下拉刷新',
-                    release: '释放刷新',
-                    loading: '正在刷新'
-                }
-            }
+        pullDownNormal: {
+            type: String,
+            default: '下拉刷新'
         },
-        pullUpTip: {
-            type: Object,
-            default() {
-                return {
-                    normal: '上拉加载',
-                    release: '释放加载',
-                    loading: '正在加载',
-                    end: '暂无更多'
-                }
-            }
+        pullDownRelease: {
+            type: String,
+            default: '释放刷新'
+        },
+        pullDownLoading: {
+            type: String,
+            default: '正在刷新'
+        },
+        pullUpNormal: {
+            type: String,
+            default: '上拉加载'
+        },
+        pullUpRelease: {
+            type: String,
+            default: '释放加载'
+        },
+        pullUpLoading: {
+            type: String,
+            default: '正在加载'
+        },
+        pullUpEnd: {
+            type: String,
+            default: '暂无更多'
         },
         scrollbars: {
             type: Boolean,
             default: true
         },
-        // 预留
+        // 是否实时触发下拉事件，预留
         pullDownImmediate: Boolean,
+        // 是否实时触发上拉事件
         pullUpImmediate: Boolean
     },
     data() {
         return {
             pullDownStyle: {},
-            label: {
-                down: '',
-                up: ''
-            },
-            loading: {
-                down: false,
-                up: false
-            },
-            pending: {
-                down: false,
-                up: false
-            },
+
+            labelDown: '',
+            labelUp: '',
+
+            loadingDown: false,
+            loadingUp: false,
+            pendingDown: false,
+            pendingUp: false,
+
             scrollStartPos: 0,
+
             isEnd: false
         }
     },
@@ -104,9 +110,10 @@ export default {
             immediate: true,
             handler(value) {
                 this.$nextTick(() => this.render());
-                this.label.down = this.pullDownTip.normal;
+                // 初始化数据时候初始化label
+                this.labelDown = this.pullDownNormal;
                 if (value) {
-                    this.label.up = this.pullUpTip.normal
+                    this.labelUp = this.pullUpImmediate ? this.pullUpLoading : this.pullUpNormal
                 }
             }
         }
@@ -145,8 +152,8 @@ export default {
                 self.scroller = new IScroll(self.$refs.scroller, this.scrollerCfg);
 
                 self.scroller.on('refresh', function () {
-                    if (self.pullDown && self.loading.down) {
-                        self.loading.down = false;
+                    if (self.pullDown && self.loadingDown) {
+                        self.loadingDown = false;
                         if (this.y >= 0) {
                             self.hidePullDown(250, true)
                         } else if (this.y > -self.pullDownOffset) {
@@ -161,13 +168,9 @@ export default {
                             this.scrollBy(0, self.pullDownOffset, 0)
                         }
                     }
-                    if (self.pullUp && self.loading.up) {
-                        self.loading.up = false;
-                        if (self.isEnd) {
-                            self.label.up = self.pullUpTip.end
-                        } else {
-                            self.label.up = self.pullUpTip.normal
-                        }
+                    if (self.pullUp && self.loadingUp) {
+                        self.loadingUp = false;
+                        self.labelUp = self.isEnd ? self.pullUpEnd : self.pullUpNormal
                     }
                 });
 
@@ -181,8 +184,8 @@ export default {
                             this.hasVerticalScroll = true;
                             self.scrollStartPos = -1000;
                         } else if ((self.scrollStartPos === -1000)
-                                && (((!self.pullUp) && (!self.pending.down) && (this.y < 0))
-                                    || ((!self.pullDown) && (!self.pending.up) && (this.y > 0)))) {
+                                && (((!self.pullUp) && (!self.pendingDown) && (this.y < 0))
+                                    || ((!self.pullDown) && (!self.pendingUp) && (this.y > 0)))) {
                             this.hasVerticalScroll = false;
                             self.scrollStartPos = 0;
                             this.scrollBy(0, -this.y, 0)
@@ -190,45 +193,39 @@ export default {
                     }
 
                     if (self.pullDown) {
-                        if (this.y > self.pullDownOffset + self.pullThreshold && !self.pending.down) {
-                            self.pending.down = true;
+                        if (this.y > self.pullDownOffset + self.pullThreshold && !self.pendingDown) {
+                            self.pendingDown = true;
                             this.scrollBy(0, -self.pullDownOffset, 0);
-                            self.label.down = self.pullDownTip.release
-                        } else if (this.y < 0 && self.pending.down) {
-                            self.pending.down = false;
+                            self.labelDown = self.pullDownRelease
+                        } else if (this.y < 0 && self.pendingDown) {
+                            self.pendingDown = false;
                             self.hidePullDown(0, false);
                             this.scrollBy(0, self.pullDownOffset, 0);
-                            self.label.down = self.pullDownTip.normal
+                            self.labelDown = self.pullDownNormal
                         }
                     }
-                    if (self.pullUp && !self.isEnd) {
-                        if (this.y < (this.maxScrollY - (self.pullUpImmediate ? 0 : self.pullThreshold) + (self.pullUpImmediate ? self.pullDownOffset : 0)) && !self.pending.up) {
-                            if (self.pullUpImmediate) {
-                                self.doPullUp()
-                            } else {
-                                self.pending.up = true;
-                                self.label.up = self.pullUpTip.release
-                            }
-                        } else if (this.y > (this.maxScrollY + self.pullThreshold) && self.pending.up) {
-                            self.pending.up = false;
-                            self.label.up = self.pullUpTip.normal
+                    if (self.pullUp && !self.isEnd && !self.pullUpImmediate) {
+                        if (this.y < this.maxScrollY - self.pullThreshold && !self.pendingUp) {
+                            self.pendingUp = true;
+                            self.labelUp = self.pullUpRelease
+                        } else if (this.y > this.maxScrollY + self.pullThreshold && self.pendingUp) {
+                            self.pendingUp = false;
+                            self.labelUp = self.pullUpNormal
                         }
                     }
                 });
 
                 self.scroller.on('scrollEnd', function () {
-                    if (self.pullDown && self.pending.down) {
-                        self.pending.down = false;
+                    if (self.pullDown && self.pendingDown) {
                         self.doPullDown()
                     }
-                    if (self.pullUp && self.pending.up) {
-                        self.pending.up = false;
+                    if (self.pullUp && !self.isEnd && (self.pendingUp || (self.pullUpImmediate && this.y < this.maxScrollY + self.pullDownOffset))) {
                         self.doPullUp()
                     }
                     if (self.scrollStartPos === -1000) {
                         this.hasVerticalScroll = this.options.scrollY && this.maxScrollY < 0
                     }
-                });
+                })
             } else {
                 this.refresh()
             }
@@ -238,23 +235,31 @@ export default {
             if (refresh) {
                 setTimeout(() => {
                     this.refresh();
-                    this.label.down = this.pullDownTip.normal;
+                    this.labelDown = this.pullDownNormal;
                     this.pullDownStyle.transitionDuration = ''
                 }, time + 10);
             }
         },
         doPullDown() {
-            if (this.pullDown && !this.loading.down) {
-                this.loading.down = true;
-                this.label.down = this.pullDownTip.loading;
-                this.pullDown(this.end)
+            if (this.pullDown && !this.loadingDown) {
+                this.pendingDown = false;
+                this.loadingDown = true;
+                this.labelDown = this.pullDownLoading;
+                if (typeof this.pullDown === 'function') {
+                    this.pullDown(this.end)
+                }
+                this.$emit('pull-down', this.end)
             }
         },
         doPullUp() {
-            if (this.pullUp && !this.loading.up) {
-                this.loading.up = true;
-                this.label.up = this.pullUpTip.loading;
-                this.pullUp(this.end)
+            if (this.pullUp && !this.loadingUp) {
+                this.pendingUp = false;
+                this.loadingUp = true;
+                this.labelUp = this.pullUpLoading;
+                if (typeof this.pullUp === 'function') {
+                    this.pullUp(this.end)
+                }
+                this.$emit('pull-up', this.end)
             }
         },
         end(isEnd) {
@@ -267,6 +272,8 @@ export default {
 
 <style lang="less" scoped>
     .scroller {
+        height: 100%;
+        overflow: hidden;
         touch-action: pan-x pinch-zoom;
         &__wrapper {
             position: absolute;

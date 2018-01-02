@@ -1,0 +1,12 @@
+{
+  "name": "scroller-panel",
+  "version": "0.0.1",
+  "description": "scroller panel,vuejs pull down refresh and pull up loading",
+  "main": "index.js",
+  "repository": "https://github.com/weizs/scroller-panel.git",
+  "author": "weizhansheng@outlook.com",
+  "license": "MIT",
+  "dependencies": {
+    "iscroll": "^5.2.0"
+  }
+}
